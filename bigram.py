@@ -12,11 +12,12 @@ torch.manual_seed(1337)
 # Hyperparameters
 batch_size = 32  # Number of sequences processed in parallel
 block_size = 8   # Maximum context length for predictions
-max_iters = 20000
+max_iters = 3000
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_interval = 1000
+eval_interval = 300
 eval_iters = 200
+n_embd = 32
 
 # Data loading
 def load_data(file_path="input.txt"):
@@ -25,22 +26,20 @@ def load_data(file_path="input.txt"):
         text = f.read()
     return text
 
-def create_tokenizer(text):
-    """Create character-level tokenizer"""
-    chars = sorted(list(set(text)))
-    vocab_size = len(chars)
-    
-    # Create mappings
-    stoi = {ch: i for i, ch in enumerate(chars)}
-    itos = {i: ch for i, ch in enumerate(chars)}
-    
-    def encode(s): 
-        return [stoi[c] for c in s]
-    
-    def decode(L): 
-        return "".join([itos[i] for i in L])
-    
-    return encode, decode, vocab_size
+#Tokenizer
+text = load_data()
+chars = sorted(list(set(text)))
+vocab_size = len(chars)
+
+# Create mappings
+stoi = {ch: i for i, ch in enumerate(chars)}
+itos = {i: ch for i, ch in enumerate(chars)}
+
+def encode(s): 
+    return [stoi[c] for c in s]
+
+def decode(L): 
+    return "".join([itos[i] for i in L])
 
 def prepare_data(text, encode_fn):
     """Prepare training and validation data"""
@@ -67,7 +66,7 @@ def get_batch(split, train_data, val_data):
     x, y = x.to(device), y.to(device)
     return x, y
 
-@torch.no_grad()
+@torch.no_grad() # No backward => No storage of intermediate computation
 def estimate_loss(model, train_data, val_data):
     """Estimate loss on train and validation sets"""
     out = {}
@@ -87,11 +86,11 @@ def estimate_loss(model, train_data, val_data):
 class BigramLanguageModel(nn.Module):
     """Simple Bigram Language Model"""
     
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
         # Token embedding table: each token maps to a vocab_size dimensional vector
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
-
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+ 
     def forward(self, idx, targets=None):
         """
         Forward pass
@@ -137,8 +136,6 @@ class BigramLanguageModel(nn.Module):
 def train_model():
     """Main training function"""
     print("Loading data...")
-    text = load_data()
-    encode, decode, vocab_size = create_tokenizer(text)
     train_data, val_data = prepare_data(text, encode)
     
     print(f"Vocab size: {vocab_size}")
@@ -146,7 +143,7 @@ def train_model():
     print(f"Validation data length: {len(val_data):,} tokens")
     
     # Initialize model
-    model = BigramLanguageModel(vocab_size)
+    model = BigramLanguageModel()
     model = model.to(device)
     
     # Print number of parameters
