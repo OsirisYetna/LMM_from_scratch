@@ -90,6 +90,7 @@ class BigramLanguageModel(nn.Module):
         super().__init__()
         # Token embedding table: each token maps to a vocab_size dimensional vector
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size,n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size) # Go from token embed to logits
  
     def forward(self, idx, targets=None):
@@ -97,9 +98,12 @@ class BigramLanguageModel(nn.Module):
         Forward pass
         idx and targets are both (B,T) tensor of integers
         """
+        B,T = idx.shape
         # Get token embeddings
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
-        logits = self.lm_head(tok_emb) # (B,T, vocab_size)
+        pos_emb = self.position_embedding_table(torch.arange(T,device = device)) # (T,C)
+        x = tok_emb + pos_emb
+        logits = self.lm_head(x) # (B,T, vocab_size)
 
         
         if targets is None:
