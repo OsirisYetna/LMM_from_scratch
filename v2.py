@@ -12,10 +12,10 @@ torch.manual_seed(1337)
 # Hyperparameters
 batch_size = 32  # Number of sequences processed in parallel
 block_size = 8   # Maximum context length for predictions
-max_iters = 3000
+max_iters = 5000
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_interval = 300
+eval_interval = 500
 eval_iters = 200
 n_embd = 32
 
@@ -83,6 +83,35 @@ def estimate_loss(model, train_data, val_data):
     model.train()
     return out
 
+class Head(nn.Module):
+    """one head of self-attention"""
+
+    def __init__(self,head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias = False)
+        self.query = nn.Linear(n_embd, head_size, bias = False)
+        self.value = nn.Linear(n_embd, head_size, bias = False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size,block_size)))
+        # tril is registered as a buffer because it's constant, not trainable, 
+        # Using self.tril as a normal attribute won't move it to GPU automatically 
+        # or include it in state_dict(), unlike a registered buffer.# but should move with the model across devices and be saved in state_dict
+
+
+    def forward(self,x):
+        B,T,C = x.shape
+        q = self.query(x) # B,T,C
+        k = self.key(x) # B,T,C
+        
+        # Computation of attention scores (affinities)
+        W = q @ k.transpose(-2,-1) * C**-0.5 # (B,T,C) @ (B,C,T) --> (B,T,T)
+        W = W.masked_fill(self.tril[:T:T]==0, float('-inf'))
+        W = F.softmax(W, dim = -1) # (B,T,T)
+
+        # Weighted aggregation of the values
+        v = self.value(x) # (B,T,C)
+        out = W @ v # (B,T,T) @ (B,T,C) --> (B,T,C)
+        return out
+
 class BigramLanguageModel(nn.Module):
     """Simple Bigram Language Model"""
     
@@ -91,6 +120,7 @@ class BigramLanguageModel(nn.Module):
         # Token embedding table: each token maps to a vocab_size dimensional vector
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size,n_embd)
+        self.sa_head = Head(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size) # Go from token embed to logits
  
     def forward(self, idx, targets=None):
@@ -103,6 +133,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
         pos_emb = self.position_embedding_table(torch.arange(T,device = device)) # (T,C)
         x = tok_emb + pos_emb
+        x = self.sa_embd(x) # apply one head of self-attention
         logits = self.lm_head(x) # (B,T, vocab_size)
 
         
@@ -123,6 +154,9 @@ class BigramLanguageModel(nn.Module):
         idx is (B, T) array of indices in the current context
         """
         for _ in range(max_new_tokens):
+            # We only take the last block_size of idx (context window)
+            idx_cond = idx[:,-block_size:]
+            
             # Get predictions
             logits, loss = self(idx)
             
