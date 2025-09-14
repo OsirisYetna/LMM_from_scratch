@@ -10,14 +10,17 @@ from torch.nn import functional as F
 torch.manual_seed(1337)
 
 # Hyperparameters
-batch_size = 32  # Number of sequences processed in parallel
-block_size = 8   # Maximum context length for predictions
-max_iters = 3000
-learning_rate = 1e-3
+batch_size = 64  # Number of sequences processed in parallel
+block_size = 256   # Maximum context length for predictions
+max_iters = 5000
+learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_interval = 300
+eval_interval = 500
 eval_iters = 200
-n_embd = 32
+n_embd = 384
+n_head = 6
+n_layer = 6
+dropout = 0.2
 
 # Data loading
 def load_data(file_path="input.txt"):
@@ -83,6 +86,80 @@ def estimate_loss(model, train_data, val_data):
     model.train()
     return out
 
+class Head(nn.Module):
+    """one head of self-attention"""
+
+    def __init__(self,head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias = False)
+        self.query = nn.Linear(n_embd, head_size, bias = False)
+        self.value = nn.Linear(n_embd, head_size, bias = False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size,block_size)))
+        # tril is registered as a buffer because it's constant, not trainable, 
+        # Using self.tril as a normal attribute won't move it to GPU automatically 
+        # or include it in state_dict(), unlike a registered buffer.# but should move with the model across devices and be saved in state_dict
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self,x):
+        B,T,C = x.shape
+        q = self.query(x) # B,T,C
+        k = self.key(x) # B,T,C
+        
+        # Computation of attention scores (affinities)
+        W = q @ k.transpose(-2,-1) * C**-0.5 # (B,T,C) @ (B,C,T) --> (B,T,T)
+        W = W.masked_fill(self.tril[:T:T]==0, float('-inf'))
+        W = F.softmax(W, dim = -1) # (B,T,T)
+        W = self.dropout(W)
+
+        # Weighted aggregation of the values
+        v = self.value(x) # (B,T,C)
+        out = W @ v # (B,T,T) @ (B,T,C) --> (B,T,C)
+        return out
+
+class multiHeadAttention(nn.Module):
+    """multiple heads of self_attention in parallel"""
+
+    def __init__(self,num_heads, head_size):
+        super().__init__()
+        self.heads = nn.ModuleList([Head(head_size)])
+        self.proj = nn.Linear(n_embd, n_embd)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self,x):
+        out = torch.cat([h(x) for h in self.heads], dim = -1)
+        out = self.dropout(self.proj(out))
+
+class FeedForward(nn.Module):
+    """ simple linear layer followed by a non-linearrity"""
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Linear(4 * n_embd,n_embd), # reput the token in the originale dimension for the residual connection
+            nn.Dropout(dropout)
+        )
+    
+    def forward(self,x):
+        return self.net(x)
+
+class Block(nn.Module):
+        """Transformer block : communication followed by computation"""
+        def __init__(self, n_embd, n_head):
+            super().__init__()
+            head_size = n_embd// n_head
+            self.sa = multiHeadAttention(n_head,head_size)
+            self.ffwd = FeedForward(n_embd)
+            self.ln1 = nn.LayerNorm(n_embd)
+            self.ln2 = nn.LayerNorm(n_embd)
+
+        def forward(self,x):
+            x = x + self.sa(x) # x = x + ... = residual/skip connection
+            x = x + self.ffwd(x)
+            return x
+
+
 class BigramLanguageModel(nn.Module):
     """Simple Bigram Language Model"""
     
@@ -90,6 +167,9 @@ class BigramLanguageModel(nn.Module):
         super().__init__()
         # Token embedding table: each token maps to a vocab_size dimensional vector
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size,n_embd)
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head = n_head) for _ in range(n_layer)])
+        self.ln_f = nn.LayerNorm(n_embd) # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size) # Go from token embed to logits
  
     def forward(self, idx, targets=None):
@@ -97,11 +177,19 @@ class BigramLanguageModel(nn.Module):
         Forward pass
         idx and targets are both (B,T) tensor of integers
         """
+        B,T = idx.shape
         # Get token embeddings
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
-        logits = self.lm_head(tok_emb) # (B,T, vocab_size)
+        pos_emb = self.position_embedding_table(torch.arange(T,device = device)) # (T,C)
+        x = tok_emb + pos_emb
+        x = self.blocks(x) # apply one head of self-attention
+        x = self.ln_f(x)
+        logits = self.lm_head(x) # (B,T, vocab_size )
 
-        
+        # Self-attention (sa_head): each token looks at the other tokens in the sequence and combines their information.
+        # Feed-forward (ffwd): individually transforms each token with an MLP to enrich its representation.
+        # LM head (lm_head): projects each final token vector into logits over the vocabulary to predict the next token.
+            
         if targets is None:
             loss = None
         else:
@@ -119,6 +207,9 @@ class BigramLanguageModel(nn.Module):
         idx is (B, T) array of indices in the current context
         """
         for _ in range(max_new_tokens):
+            # We only take the last block_size of idx (context window)
+            idx_cond = idx[:,-block_size:]
+            
             # Get predictions
             logits, loss = self(idx)
             
