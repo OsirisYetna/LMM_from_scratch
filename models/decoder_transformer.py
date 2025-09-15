@@ -22,7 +22,7 @@ n_head = 4
 n_layer = 3           
 dropout = 0.2
 
-def load_data(file_path="../input.txt"):
+def load_data(file_path="input.txt"):
     """Load and prepare text data"""
     with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
