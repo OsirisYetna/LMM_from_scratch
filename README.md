@@ -11,7 +11,7 @@ This project explores the implementation of language models from the ground up, 
 
 ## Input - Training Data
 
-For training, we use the Tiny Shakespeare dataset (1M character-level token), a ~1 MB collection of several Shakespeare plays. It provides a rich but compact corpus of classical English text, making it ideal for experimenting with character-level language models. The goal is to train a model to generate new passages in a Shakespeare-like style.
+For training, we use the **Tiny Shakespeare** dataset (1M character-level token), a ~1 MB collection of several Shakespeare plays. It provides a rich but compact corpus of classical English text, making it ideal for experimenting with character-level language models. The goal is to train a model to **generate new passages in a Shakespeare-like style**.
 
 # Large Language Models from Scratch
 
@@ -115,9 +115,12 @@ In my macbook I have python3 but it's depends on what setting you have in your c
 python3 models/bigram_model.py
 ```
 
-2. **Single Block Transformer:**
+2. **Intermediate models:**
 ```bash
+python3 models/single_head_attention.py
+python3 models/multiple_head_attention.py
 python3 models/single_block_transformer.py
+
 ```
 
 3. **Transformer Model:**
