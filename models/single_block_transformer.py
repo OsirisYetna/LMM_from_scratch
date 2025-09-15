@@ -27,7 +27,7 @@ n_embd = 128
 n_head = 4            
 dropout = 0.2        
 
-def load_data(file_path="../input.txt"):
+def load_data(file_path="input.txt"):
     with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
     print(f"Loaded data from {file_path}")
