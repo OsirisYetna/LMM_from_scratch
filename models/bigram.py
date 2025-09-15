@@ -182,5 +182,24 @@ def train_model():
     generated_text = decode(model.generate(context, max_new_tokens=500)[0].tolist())
     print(generated_text)
     
-    return model, encode, decode
+    return model
+
+if __name__ == "__main__":
+    # Run training
+    model = train_model()
+    
+    # Interactive generation
+    print("\nInteractive mode - Enter some text to continue (or 'quit' to exit):")
+    while True:
+        user_input = input("\nPrompt: ").strip()
+        if user_input.lower() == 'quit':
+            break
+        if user_input:
+            try:
+                context = torch.tensor([encode(user_input)], dtype=torch.long, device=device)
+                generated = model.generate(context, max_new_tokens=100)
+                result = decode(generated[0].tolist())
+                print(f"Generated: {result}")
+            except Exception as e:
+                print(f"Error: {e}")
 

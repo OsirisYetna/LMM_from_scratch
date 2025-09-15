@@ -17,15 +17,15 @@ torch.manual_seed(1337)
 
 # Hyperparameters
 batch_size = 32
-block_size = 64        
+block_size = 64
 max_iters = 3000
-learning_rate = 3e-4   
+learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_interval = 300
 eval_iters = 100
-n_embd = 128          
-n_head = 4            
-dropout = 0.2        
+n_embd = 128
+n_head = 4
+dropout = 0.15
 
 def load_data(file_path="input.txt"):
     with open(file_path, "r", encoding="utf-8") as f:
@@ -121,7 +121,7 @@ class FeedForward(nn.Module):
     def __init__(self, n_embd):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embd, 4 * n_embd),  # Expand dimension by 4x
+            nn.Linear(n_embd, 4 * n_embd),  
             nn.ReLU(),                      # Non-linearity
             nn.Linear(4 * n_embd, n_embd),  # Project back to original dimension
             nn.Dropout(dropout),            # Regularization
@@ -217,4 +217,50 @@ def train_model():
     model = SingleBlockTransformer()
     model = model.to(device)
     
-    print(f"Number of parameters: {sum(p.numel
+    print(f"Number of parameters: {sum(p.numel() for p in model.parameters())/1e6:.2f}M")
+    
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+    
+    print(f"\nStarting training on {device}...")
+    for iter in range(max_iters):
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = estimate_loss(model, train_data, val_data)
+            print(f"Step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        
+        xb, yb = get_batch('train', train_data, val_data)
+        logits, loss = model(xb, yb)
+        
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+    
+    print("\nTraining completed!")
+    
+    # Generate sample
+    print("\n" + "="*50)
+    print("SAMPLE GENERATION:")
+    print("="*50)
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    generated = decode(model.generate(context, max_new_tokens=400)[0].tolist())
+    print(generated)
+    print("="*50)
+    
+    return model
+
+if __name__ == "__main__":
+    model = train_model()
+    
+    # Interactive mode
+    print("\nInteractive mode (type 'quit' to exit):")
+    while True:
+        prompt = input("\nPrompt: ").strip()
+        if prompt.lower() == 'quit':
+            break
+        if prompt:
+            try:
+                context = torch.tensor([encode(prompt)], dtype=torch.long, device=device)
+                generated = model.generate(context, max_new_tokens=200)
+                result = decode(generated[0].tolist())
+                print(f"Generated: {result}")
+            except Exception as e:
+                print(f"Error: {e}")
