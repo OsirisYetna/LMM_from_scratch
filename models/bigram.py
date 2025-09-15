@@ -20,7 +20,7 @@ eval_iters = 200
 n_embd = 32
 
 # Data loading
-def load_data(file_path="../input.txt"):
+def load_data(file_path="input.txt"):
     """Load and prepare text data"""
     with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
