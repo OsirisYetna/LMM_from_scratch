@@ -235,16 +235,6 @@ def train_model():
         optimizer.step()
     
     print("\nTraining completed!")
-    
-    # Generate sample
-    print("\n" + "="*50)
-    print("SAMPLE GENERATION:")
-    print("="*50)
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated = decode(model.generate(context, max_new_tokens=400)[0].tolist())
-    print(generated)
-    print("="*50)
-    
     return model
 
 if __name__ == "__main__":

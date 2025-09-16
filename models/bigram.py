@@ -175,13 +175,6 @@ def train_model():
         optimizer.step()
 
     print("\nTraining completed!")
-    
-    # Generate some text
-    print("\nGenerating sample text...")
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated_text = decode(model.generate(context, max_new_tokens=500)[0].tolist())
-    print(generated_text)
-    
     return model
 
 if __name__ == "__main__":

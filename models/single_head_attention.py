@@ -14,14 +14,14 @@ from torch.nn import functional as F
 torch.manual_seed(1337)
 
 # Hyperparameters
-batch_size = 32
-block_size = 16       
-max_iters = 2000
+batch_size = 16  # Number of sequences processed in parallel
+block_size = 64   # Maximum context length for predictions
+max_iters = 5000
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_interval = 300
-eval_iters = 100
-n_embd = 64           
+eval_iters = 500
+n_embd = 128  
 
 def load_data(file_path="input.txt"):
     """Load and prepare text data"""
@@ -174,16 +174,6 @@ def train_model():
         optimizer.step()
     
     print("\nTraining completed!")
-    
-    # Generate sample
-    print("\n" + "="*50)
-    print("SAMPLE GENERATION:")
-    print("="*50)
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated = decode(model.generate(context, max_new_tokens=200)[0].tolist())
-    print(generated)
-    print("="*50)
-    
     return model
 
 if __name__ == "__main__":

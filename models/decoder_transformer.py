@@ -10,13 +10,13 @@ from torch.nn import functional as F
 torch.manual_seed(1337)
 
 # Hyperparameters optimized for CPU
-batch_size = 16        
+batch_size = 16
 block_size = 64      
-max_iters = 1000     
+max_iters = 3000     
 learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_interval = 200  
-eval_iters = 50 
+eval_interval = 300  
+eval_iters = 100
 n_embd = 128        
 n_head = 4           
 n_layer = 3           
