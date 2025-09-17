@@ -20,7 +20,7 @@ eval_iters = 200
 n_embd = 32
 
 # Data loading
-def load_data(file_path="../input.txt"):
+def load_data(file_path="input.txt"):
     """Load and prepare text data"""
     with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
@@ -175,12 +175,24 @@ def train_model():
         optimizer.step()
 
     print("\nTraining completed!")
+    return model
+
+if __name__ == "__main__":
+    # Run training
+    model = train_model()
     
-    # Generate some text
-    print("\nGenerating sample text...")
-    context = torch.zeros((1, 1), dtype=torch.long, device=device)
-    generated_text = decode(model.generate(context, max_new_tokens=500)[0].tolist())
-    print(generated_text)
-    
-    return model, encode, decode
+    # Interactive generation
+    print("\nInteractive mode - Enter some text to continue (or 'quit' to exit):")
+    while True:
+        user_input = input("\nPrompt: ").strip()
+        if user_input.lower() == 'quit':
+            break
+        if user_input:
+            try:
+                context = torch.tensor([encode(user_input)], dtype=torch.long, device=device)
+                generated = model.generate(context, max_new_tokens=100)
+                result = decode(generated[0].tolist())
+                print(f"Generated: {result}")
+            except Exception as e:
+                print(f"Error: {e}")
 
